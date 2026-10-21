@@ -258,15 +258,14 @@ export default function NearbyHelpPage() {
               {/* Map */}
               <div className="nearby-map-card">
                 <div className="nearby-map-header">
-                  <h3>Hospital Locations</h3>
+                  <h3>Emergency & Safety Locations</h3>
                   <span className="nearby-map-badge">{mapMarkers.length} plotted</span>
                 </div>
                 <div className="nearby-map-canvas">
                   <HelpMap markers={mapMarkers} userLocation={userLocation} />
                 </div>
                 <p className="nearby-map-note">
-                  Map pins use coordinates present in the hospital dataset. Police stations and
-                  women's help centres have no coordinates in the source data and are listed below.
+                  Interactive map plotting verified hospitals, police stations, and women's help centres. Toggle categories above to filter.
                 </p>
               </div>
 

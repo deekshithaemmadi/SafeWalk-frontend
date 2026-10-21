@@ -71,14 +71,14 @@ export const FAQ_ENTRIES = [
     id: "community-reports",
     keywords: ["report", "reports", "community", "verified", "incident", "unverified"],
     answer:
-      "The Community Reports page lets you describe a safety concern. These reports are UNVERIFIED — they are stored only in this browser, are not shared with other users, and are not confirmed by any authority. Treat them as informal notes, not facts, and always rely on official sources in an emergency.",
+      "The Community Reports page lets you describe a safety concern in your area. When signed in, reports are submitted to and saved in the SafeWalk database — VERIFIED reports are visible to other users. All new reports start as PENDING and are subject to moderation review before they are shown publicly. In an emergency, always call 112 rather than relying on community reports.",
     followUps: ["What should I do in an immediate emergency?"],
   },
   {
     id: "nearby-help",
     keywords: ["nearby", "hospital", "police", "help centre", "help center", "women help", "clinic"],
     answer:
-      "The Nearby Help page lists hospitals (plotted on the map from a real dataset with coordinates), plus police stations and women's help centres as a directory. Only hospitals include coordinates in the source data, so police and women's centres are shown as a list rather than map pins. Always call 112 for urgent help.",
+      "The Nearby Help page shows hospitals, police stations, and women's help centres all plotted on an interactive map — all three datasets include real coordinates for Hyderabad locations. You can filter by category, search by name, and tap any marker for address and contact details. Always call 112 for urgent help.",
     followUps: ["What are the key emergency numbers in India?"],
   },
   {

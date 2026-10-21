@@ -16,6 +16,7 @@ import NotFoundPage from "./pages/NotFoundPage";
 import NearbyHelpPage from "./pages/NearbyHelpPage";
 import SosPage from "./pages/SosPage";
 import CommunityReportsPage from "./pages/CommunityReportsPage";
+import TripHistoryPage from "./pages/TripHistoryPage";
 import SafetyChatbot from "./components/SafetyChatbot";
 
 export default function App() {
@@ -41,6 +42,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <DashboardPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/trips"
+                element={
+                  <ProtectedRoute>
+                    <TripHistoryPage />
                   </ProtectedRoute>
                 }
               />

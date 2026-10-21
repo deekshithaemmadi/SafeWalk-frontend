@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Shield, User, PhoneCall, LogOut, Menu, X, Compass, MapPinned, Siren, Flag } from "lucide-react";
+import { Shield, User, PhoneCall, LogOut, Menu, X, Compass, MapPinned, Siren, Flag, History } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 
 export default function Navbar() {
@@ -79,6 +79,13 @@ export default function Navbar() {
                 className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
               >
                 Dashboard
+              </NavLink>
+              <NavLink
+                to="/trips"
+                className={({ isActive }) => (isActive ? "nav-link active" : "nav-link")}
+              >
+                <History size={16} className="nav-icon" />
+                Trip History
               </NavLink>
               <NavLink
                 to="/emergency-contacts"
@@ -170,6 +177,9 @@ export default function Navbar() {
               <>
                 <Link to="/dashboard" className="mobile-nav-link" onClick={closeMenu}>
                   Dashboard
+                </Link>
+                <Link to="/trips" className="mobile-nav-link" onClick={closeMenu}>
+                  Trip History
                 </Link>
                 <Link to="/emergency-contacts" className="mobile-nav-link" onClick={closeMenu}>
                   Emergency Contacts

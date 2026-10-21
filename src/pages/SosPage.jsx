@@ -1,8 +1,10 @@
 import { useCallback, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Siren,
   PhoneCall,
   Phone,
+  MessageSquare,
   MapPin,
   ShieldCheck,
   Info,
@@ -10,6 +12,8 @@ import {
   X,
   Check,
   LocateFixed,
+  Copy,
+  CheckCheck,
 } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import { sendSosAlert } from "../services/sosService";
@@ -19,29 +23,21 @@ const EMERGENCY_NUMBER = "112";
 const WOMENS_HELPLINE = "1091";
 
 export default function SosPage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const [stage, setStage] = useState("idle"); // 'idle' | 'confirming' | 'active'
-  const [consentLocation, setConsentLocation] = useState(false);
+  const [consentLocation, setConsentLocation] = useState(true);
   const [location, setLocation] = useState(null);
   const [locating, setLocating] = useState(false);
   const [geoNotice, setGeoNotice] = useState("");
-  const [deliveryNotice, setDeliveryNotice] = useState("");
+  const [sosResult, setSosResult] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const contacts =
     user?.emergencyContacts && user.emergencyContacts.length > 0
       ? user.emergencyContacts
       : [];
-
-  const handleOpenConfirm = () => {
-    setDeliveryNotice("");
-    setStage("confirming");
-  };
-
-  const handleCancel = () => {
-    setStage("idle");
-    setDeliveryNotice("");
-  };
 
   const requestLocation = useCallback(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -71,17 +67,47 @@ export default function SosPage() {
     );
   }, []);
 
+  const handleOpenConfirm = () => {
+    setSosResult(null);
+    setStage("confirming");
+    if (!location) {
+      requestLocation();
+    }
+  };
+
+  const handleCancel = () => {
+    setStage("idle");
+    setSosResult(null);
+  };
+
   const handleConfirmSos = async () => {
-    // Attempt backend delivery. No backend exists yet, so this returns
-    // delivered:false with a clear reason — we never fake a success message.
-    const result = await sendSosAlert({ location, shareLocation: consentLocation });
-    setDeliveryNotice(
-      result.delivered
-        ? "Your alert was submitted to the SafeWalk alert service."
-        : result.reason ||
-            "No backend alert service is connected. This does NOT send an automated alert. Please call 112 directly."
-    );
-    setStage("active");
+    setSubmitting(true);
+    try {
+      const result = await sendSosAlert({
+        location,
+        shareLocation: consentLocation,
+        message: "SafeWalk Emergency SOS triggered by user",
+      });
+      setSosResult(result);
+      setStage("active");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getEmergencyMessageText = () => {
+    let msg = "EMERGENCY: I am in distress and need assistance.";
+    if (location) {
+      msg += ` My current location: https://maps.google.com/?q=${location.lat.toFixed(6)},${location.lon.toFixed(6)}`;
+    }
+    return msg;
+  };
+
+  const handleCopyMessage = () => {
+    const text = getEmergencyMessageText();
+    navigator.clipboard?.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   return (
@@ -94,18 +120,19 @@ export default function SosPage() {
           </div>
           <h1 className="page-intro-title">Emergency SOS</h1>
           <p className="page-intro-text">
-            One-tap access to India's national emergency number, your saved contacts, and
-            consent-based location sharing. SafeWalk cannot dispatch help for you automatically.
+            Immediate emergency response center. Activates verified incident logging to the SafeWalk
+            database, one-tap dialing to India's National Helpline (112), and direct contact alerts.
           </p>
         </div>
 
-        {/* Honest capability banner */}
+        {/* Requirements & capabilities notice */}
         <div className="sos-capability-notice" role="note">
           <AlertTriangle size={18} className="notice-icon" />
           <div>
-            <strong>This does not auto-dispatch help.</strong> Automated alert delivery requires a
-            backend service that is not connected. The fastest way to get help is to call{" "}
-            <strong>112</strong> directly using the button below.
+            <strong>Emergency Connectivity Notice:</strong> SafeWalk permanently logs your SOS alert
+            and location in our secure MySQL database. Automated direct-to-carrier SMS broadcast
+            requires a licensed external telephony gateway (e.g., Twilio or AWS SNS). Use the direct
+            <strong> Call 112</strong> and <strong>Contact Alert</strong> buttons below for instant communication.
           </div>
         </div>
 
@@ -120,17 +147,17 @@ export default function SosPage() {
                   <small>Tap to activate</small>
                 </button>
                 <p className="sos-idle-hint">
-                  Activating SOS opens a confirmation so it is never triggered by accident.
+                  Activating SOS opens a confirmation dialog so it is never triggered accidentally.
                 </p>
               </div>
             )}
 
             {stage === "confirming" && (
               <div className="sos-confirm-state">
-                <h2 className="sos-confirm-title">Confirm SOS activation?</h2>
+                <h2 className="sos-confirm-title">Confirm SOS Activation?</h2>
                 <p className="sos-confirm-text">
-                  This will open emergency options. SafeWalk will <strong>not</strong> send an
-                  automated alert because no backend alert service is connected.
+                  This will record an emergency alert in the SafeWalk database and open immediate
+                  emergency call and contact actions.
                 </p>
 
                 {/* Consent-based location sharing */}
@@ -144,14 +171,16 @@ export default function SosPage() {
                     }}
                   />
                   <span className="sos-consent-text">
-                    Share my current location with this action (optional, requires your permission)
+                    Include my current GPS location in this emergency record
                   </span>
                 </label>
 
                 {consentLocation && (
                   <div className="sos-location-status">
                     {locating && (
-                      <span><span className="spinner-sm animate-spin" /> Reading location...</span>
+                      <span>
+                        <span className="spinner-sm animate-spin" /> Acquiring accurate GPS coordinates...
+                      </span>
                     )}
                     {location && !locating && (
                       <span className="sos-location-ok">
@@ -163,11 +192,29 @@ export default function SosPage() {
                 )}
 
                 <div className="sos-confirm-actions">
-                  <button type="button" className="sos-btn-cancel" onClick={handleCancel}>
+                  <button
+                    type="button"
+                    className="sos-btn-cancel"
+                    onClick={handleCancel}
+                    disabled={submitting}
+                  >
                     <X size={16} /> Cancel
                   </button>
-                  <button type="button" className="sos-btn-confirm" onClick={handleConfirmSos}>
-                    <Check size={16} /> Yes, activate SOS
+                  <button
+                    type="button"
+                    className="sos-btn-confirm"
+                    onClick={handleConfirmSos}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <span className="spinner-sm animate-spin" /> Recording Alert...
+                      </>
+                    ) : (
+                      <>
+                        <Check size={16} /> Yes, Activate SOS
+                      </>
+                    )}
                   </button>
                 </div>
               </div>
@@ -175,27 +222,79 @@ export default function SosPage() {
 
             {stage === "active" && (
               <div className="sos-active-state">
-                {deliveryNotice && (
-                  <div className="sos-delivery-notice" role="note">
-                    <Info size={16} /> {deliveryNotice}
+                {sosResult && (
+                  <div
+                    className={`sos-delivery-notice ${sosResult.recorded ? "recorded" : "error"}`}
+                    role="note"
+                    style={{
+                      background: sosResult.recorded ? "#ecfdf5" : "#fef2f2",
+                      borderColor: sosResult.recorded ? "#a7f3d0" : "#fecaca",
+                      color: sosResult.recorded ? "#065f46" : "#991b1b",
+                      padding: "1rem",
+                      borderRadius: "8px",
+                      marginBottom: "1.25rem",
+                      border: "1px solid",
+                    }}
+                  >
+                    <Info size={18} style={{ float: "left", marginRight: "8px", marginTop: "2px" }} />
+                    <div>
+                      <strong>
+                        {sosResult.recorded
+                          ? `SOS Event #${sosResult.id} Confirmed in SafeWalk Database`
+                          : "Alert Recording Notice"}
+                      </strong>
+                      <p style={{ margin: "4px 0 0 0", fontSize: "0.875rem" }}>
+                        {sosResult.message}
+                      </p>
+                      {sosResult.createdAt && (
+                        <span style={{ fontSize: "0.75rem", opacity: 0.85, display: "block", marginTop: "4px" }}>
+                          Timestamp: {new Date(sosResult.createdAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )}
+
                 <div className="sos-call-actions">
                   <a href={`tel:${EMERGENCY_NUMBER}`} className="sos-call-primary">
-                    <PhoneCall size={22} /> Call {EMERGENCY_NUMBER} (All Emergencies)
+                    <PhoneCall size={22} /> Call {EMERGENCY_NUMBER} (National Emergency)
                   </a>
                   <a href={`tel:${WOMENS_HELPLINE}`} className="sos-call-secondary">
                     <Phone size={18} /> Call {WOMENS_HELPLINE} (Women's Helpline)
                   </a>
                 </div>
-                {consentLocation && location && (
-                  <p className="sos-shared-location">
-                    <LocateFixed size={13} /> Location ready to share manually:{" "}
-                    {location.lat.toFixed(5)}, {location.lon.toFixed(5)}
-                  </p>
+
+                {location && (
+                  <div className="sos-quick-share-box" style={{ background: "#f8fafc", padding: "0.75rem", borderRadius: "8px", marginTop: "1rem", border: "1px solid #e2e8f0" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.85rem", color: "#334155", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <LocateFixed size={14} /> Location: {location.lat.toFixed(5)}, {location.lon.toFixed(5)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyMessage}
+                        style={{
+                          background: "#0d9488",
+                          color: "#fff",
+                          border: "none",
+                          padding: "4px 10px",
+                          borderRadius: "4px",
+                          fontSize: "0.8rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {copied ? <CheckCheck size={14} /> : <Copy size={14} />}
+                        <span>{copied ? "Copied!" : "Copy Alert Text"}</span>
+                      </button>
+                    </div>
+                  </div>
                 )}
-                <button type="button" className="sos-btn-cancel" onClick={handleCancel}>
-                  Close SOS panel
+
+                <button type="button" className="sos-btn-cancel" onClick={handleCancel} style={{ marginTop: "1.25rem" }}>
+                  Close SOS Panel
                 </button>
               </div>
             )}
@@ -208,28 +307,54 @@ export default function SosPage() {
               <h3>Your Emergency Contacts</h3>
             </div>
             {contacts.length === 0 ? (
-              <p className="sos-no-contacts">
-                You have no saved emergency contacts yet. Add them from the Emergency Contacts page.
-              </p>
+              <div className="sos-no-contacts">
+                <p>You have no saved emergency contacts yet.</p>
+                {isAuthenticated ? (
+                  <Link to="/emergency-contacts" className="btn-secondary-nav" style={{ display: "inline-block", marginTop: "0.5rem" }}>
+                    Add Emergency Contacts
+                  </Link>
+                ) : (
+                  <Link to="/login" className="btn-secondary-nav" style={{ display: "inline-block", marginTop: "0.5rem" }}>
+                    Sign in to manage contacts
+                  </Link>
+                )}
+              </div>
             ) : (
               <div className="sos-contacts-list">
-                {contacts.map((c, idx) => (
-                  <div key={c.id || idx} className="sos-contact-item">
-                    <div className="sos-contact-info">
-                      <strong>{c.name}</strong>
-                      {c.relation && <span className="sos-contact-relation">{c.relation}</span>}
-                      <span className="sos-contact-phone">{c.phone}</span>
+                {contacts.map((c, idx) => {
+                  const smsBody = encodeURIComponent(getEmergencyMessageText());
+                  return (
+                    <div key={c.id || idx} className="sos-contact-item">
+                      <div className="sos-contact-info">
+                        <strong>{c.name}</strong>
+                        {c.relation && <span className="sos-contact-relation">{c.relation}</span>}
+                        <span className="sos-contact-phone">{c.phone}</span>
+                      </div>
+                      <div className="sos-contact-action-group" style={{ display: "flex", gap: "8px" }}>
+                        <a
+                          href={`sms:${c.phone}?body=${smsBody}`}
+                          className="sos-contact-call"
+                          title={`Send emergency SMS to ${c.name}`}
+                          style={{ background: "#0284c7", color: "#fff" }}
+                        >
+                          <MessageSquare size={16} />
+                        </a>
+                        <a
+                          href={`tel:${c.phone}`}
+                          className="sos-contact-call"
+                          title={`Call ${c.name}`}
+                        >
+                          <Phone size={16} />
+                        </a>
+                      </div>
                     </div>
-                    <a href={`tel:${c.phone}`} className="sos-contact-call" title={`Call ${c.name}`}>
-                      <Phone size={16} />
-                    </a>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             <p className="sos-contacts-note">
-              Calling a contact uses your phone's dialer. SafeWalk does not send them automated
-              messages or your location.
+              Use the phone and message buttons to directly call or text contacts from your device dialer.
+              Direct automated SMS dispatch requires an active telephony gateway provider (e.g. Twilio / Sinch).
             </p>
           </div>
         </div>
@@ -237,5 +362,3 @@ export default function SosPage() {
     </div>
   );
 }
-
-

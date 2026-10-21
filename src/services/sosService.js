@@ -1,70 +1,63 @@
 /**
  * SOS Emergency Service
- *
- * FRONTEND-ONLY STATUS:
- * There is currently NO backend endpoint that delivers SOS alerts. The functions
- * below define a clear integration point (POST /api/sos) so that alert delivery,
- * SMS broadcasting, and location sharing can be wired to a real backend later.
- *
- * Until a backend exists, SafeWalk does NOT claim to send, deliver, or dispatch
- * any alert. The SOS UI only:
- *   - initiates a direct phone call to India's national emergency number (112),
- *   - lets the user manually share their consent-based location, and
- *   - lists the user's saved emergency contacts for manual calling.
+ * Communicates with backend endpoint:
+ * - POST /api/sos (Records emergency event and optional location in MySQL sos_events table)
+ * - GET /api/sos (Fetches user's previous SOS events)
  */
 
+import { apiRequest } from "./api";
+
 /**
- * Attempt to submit an SOS alert to the backend.
+ * Submit an SOS alert to the Spring Boot backend to be recorded in MySQL.
  *
- * @param {object} payload
- * @param {{lat:number, lon:number, accuracy?:number}|null} payload.location
- * @param {boolean} payload.shareLocation - whether the user consented to share location
- * @param {string} [payload.message]
- * @returns {Promise<{delivered:boolean, reason?:string, preparedPayload?:object}>}
- *
- * Integration point: replace the simulated branch with a real `apiRequest`
- * call to `POST /api/sos` (imported from "./api") once the backend implements
- * alert delivery. The `preparedPayload` shows exactly what would be sent.
+ * @param {object} params
+ * @param {{lat:number, lon:number, accuracy?:number}|null} [params.location]
+ * @param {boolean} [params.shareLocation] - whether the user consented to share location
+ * @param {string} [params.message]
+ * @returns {Promise<{recorded: boolean, id?: number, delivered: boolean, message: string, createdAt?: string}>}
  */
 export async function sendSosAlert({ location = null, shareLocation = false, message = "" } = {}) {
-  const preparedPayload = {
-    message: message || "SOS activated from SafeWalk",
-    shareLocation,
-    location:
-      shareLocation && location
-        ? { lat: location.lat, lon: location.lon, accuracy: location.accuracy ?? null }
-        : null,
+  const payload = {
+    message: message || "SOS activated from SafeWalk web application",
+    shareLocation: Boolean(shareLocation),
+    latitude: shareLocation && location ? location.lat : null,
+    longitude: shareLocation && location ? location.lon : null,
+    accuracy: shareLocation && location?.accuracy != null ? location.accuracy : null,
     requestedAt: new Date().toISOString(),
   };
 
   try {
-    // =====================================================================
-    // REAL INTEGRATION POINT — enable once the backend implements delivery:
-    //
-    //   import { apiRequest } from "./api";
-    //   const data = await apiRequest("/api/sos", {
-    //     method: "POST",
-    //     body: JSON.stringify(preparedPayload),
-    //   });
-    //   return { delivered: true, data };
-    // =====================================================================
+    const data = await apiRequest("/api/sos", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
 
-    // No backend endpoint is implemented yet — do not pretend an alert was sent.
-    await Promise.resolve(); // keep async signature stable for future wiring
     return {
-      delivered: false,
-      preparedPayload,
-      reason:
-        "No backend alert service is connected. This action does NOT send an automated alert. Please call 112 directly.",
+      recorded: true,
+      id: data.id,
+      delivered: Boolean(data.delivered), // false per backend contract until SMS gateway is connected
+      message: data.message || "SOS event recorded in SafeWalk database.",
+      createdAt: data.createdAt,
     };
   } catch (error) {
     return {
+      recorded: false,
       delivered: false,
-      reason:
-        error?.message ||
-        "Alert could not be delivered because no backend service is connected.",
+      message: error?.message || "Failed to record SOS event in the backend database.",
     };
   }
 }
 
-export default { sendSosAlert };
+/**
+ * Retrieve past SOS event history for the authenticated user.
+ */
+export async function getSosHistory() {
+  return await apiRequest("/api/sos", {
+    method: "GET",
+  });
+}
+
+export default {
+  sendSosAlert,
+  getSosHistory,
+};

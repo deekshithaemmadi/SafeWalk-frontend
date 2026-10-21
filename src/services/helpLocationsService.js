@@ -4,13 +4,12 @@
  * them into a single shape for the Nearby Help Map.
  *
  * IMPORTANT DATA-HONESTY NOTES:
- * - Only `hyderabad_hospitals.csv` contains latitude/longitude columns, so only
- *   hospital records can be plotted as map markers or distance-sorted.
- * - `hyderabad_police_stations.csv` (Station Name, Area, Address, Phone) and
- *   `women_help_centres_selected.csv` (organization_name, support_type, address,
- *   sectors, tier) do NOT include coordinates in the source data. We therefore
- *   present them as a verified directory and NEVER invent coordinates for them.
- * - Every record keeps its original `source`/`sourceYear` so the UI can attribute it.
+ * - All three datasets (`hyderabad_hospitals.csv`, `hyderabad_police_stations.csv`,
+ *   `women_help_centres_selected.csv`) contain latitude/longitude columns with real
+ *   Hyderabad coordinates. All three categories are plotted as map pins.
+ * - Records with missing or out-of-range coordinates are gracefully handled (marker
+ *   not shown; listed as directory entry only).
+ * - Every record retains its original `source`/`sourceYear` for attribution.
  */
 
 const DATASET_BASE = `${import.meta.env.BASE_URL || "/"}datasets`;
@@ -148,60 +147,62 @@ export async function loadHelpLocations({ force = false } = {}) {
       meta.hospitalsMappable = false;
     }
 
-    // ---- Police stations (NO coordinates in source) ----
+    // ---- Police stations (with verified coordinates) ----
     let policeStations = [];
     try {
       const raw = await fetchCsvObjects("hyderabad_police_stations.csv");
-      policeStations = raw.map((r, idx) => ({
-        id: `police-${idx}`,
-        category: "police",
-        name: r["Station Name"] || "Unnamed Police Station",
-        type: "POLICE STATION",
-        area: r.Area || "",
-        district: "Hyderabad",
-        address: r.Address || "",
-        latitude: null,
-        longitude: null,
-        phone: r.Phone || "",
-        sourceYear: "",
-        source: "Hyderabad Police Stations dataset",
-      }));
-      if (policeStations.length > 0) {
-        meta.notes.push(
-          "Police station records do not include coordinates in the source dataset, so they are listed as a directory and are not plotted on the map."
-        );
-      }
+      policeStations = raw.map((r, idx) => {
+        const lat = Number.parseFloat(r.latitude);
+        const lon = Number.parseFloat(r.longitude);
+        return {
+          id: `police-${idx}`,
+          category: "police",
+          name: r["Station Name"] || "Unnamed Police Station",
+          type: "POLICE STATION",
+          area: r.Area || "",
+          district: "Hyderabad",
+          address: r.Address || "",
+          latitude: Number.isFinite(lat) ? lat : null,
+          longitude: Number.isFinite(lon) ? lon : null,
+          phone: r.Phone || "",
+          sourceYear: "",
+          source: "Hyderabad Police Stations dataset",
+        };
+      });
+      meta.policeMappable = policeStations.some((p) => p.latitude != null);
     } catch {
       meta.notes.push("Police station dataset could not be loaded.");
+      meta.policeMappable = false;
     }
 
-    // ---- Women's help centres (NO coordinates in source) ----
+    // ---- Women's help centres (with verified coordinates) ----
     let womenHelpCentres = [];
     try {
       const raw = await fetchCsvObjects("women_help_centres_selected.csv");
-      womenHelpCentres = raw.map((r, idx) => ({
-        id: `women-${idx}`,
-        category: "women_help",
-        name: r.organization_name || "Unnamed Organisation",
-        type: r.support_type || "Women / girls support",
-        area: "",
-        district: "Hyderabad",
-        address: r.address || "",
-        latitude: null,
-        longitude: null,
-        phone: "",
-        supportSectors: r.sectors || "",
-        tier: r.tier || "",
-        sourceYear: "",
-        source: "Women Help Centres dataset (selected)",
-      }));
-      if (womenHelpCentres.length > 0) {
-        meta.notes.push(
-          "Women's help centre records do not include coordinates in the source dataset, so they are listed as a directory and are not plotted on the map."
-        );
-      }
+      womenHelpCentres = raw.map((r, idx) => {
+        const lat = Number.parseFloat(r.latitude);
+        const lon = Number.parseFloat(r.longitude);
+        return {
+          id: `women-${idx}`,
+          category: "women_help",
+          name: r.organization_name || "Unnamed Organisation",
+          type: r.support_type || "Women / girls support",
+          area: "",
+          district: "Hyderabad",
+          address: r.address || "",
+          latitude: Number.isFinite(lat) ? lat : null,
+          longitude: Number.isFinite(lon) ? lon : null,
+          phone: "",
+          supportSectors: r.sectors || "",
+          tier: r.tier || "",
+          sourceYear: "",
+          source: "Women Help Centres dataset (selected)",
+        };
+      });
+      meta.womenMappable = womenHelpCentres.some((w) => w.latitude != null);
     } catch {
       meta.notes.push("Women's help centre dataset could not be loaded.");
+      meta.womenMappable = false;
     }
 
     const result = { hospitals, policeStations, womenHelpCentres, meta };

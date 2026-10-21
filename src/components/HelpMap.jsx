@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -78,9 +78,35 @@ function HelpMapController({ markers, userLocation }) {
 }
 
 export default function HelpMap({ markers = [], userLocation = null }) {
-  const mappable = markers.filter(
-    (m) => Number.isFinite(m.latitude) && Number.isFinite(m.longitude)
-  );
+  // Calculate tiny spiral offsets for markers that share the same or very close coordinates
+  // so no markers overlap or hide each other.
+  const processedMarkers = useMemo(() => {
+    const mappable = markers.filter(
+      (m) => Number.isFinite(m.latitude) && Number.isFinite(m.longitude)
+    );
+
+    const clusters = new Map();
+    mappable.forEach((m) => {
+      const key = `${m.latitude.toFixed(4)},${m.longitude.toFixed(4)}`;
+      if (!clusters.has(key)) clusters.set(key, []);
+      clusters.get(key).push(m);
+    });
+
+    return mappable.map((m) => {
+      const key = `${m.latitude.toFixed(4)},${m.longitude.toFixed(4)}`;
+      const group = clusters.get(key);
+      if (!group || group.length <= 1) {
+        return { ...m, displayLat: m.latitude, displayLon: m.longitude };
+      }
+      const index = group.indexOf(m);
+      const angle = (2 * Math.PI * index) / group.length;
+      const radius = 0.00025;
+      const displayLat = m.latitude + radius * Math.cos(angle);
+      const displayLon =
+        m.longitude + (radius * Math.sin(angle)) / Math.cos((m.latitude * Math.PI) / 180);
+      return { ...m, displayLat, displayLon };
+    });
+  }, [markers]);
 
   return (
     <MapContainer
@@ -95,7 +121,7 @@ export default function HelpMap({ markers = [], userLocation = null }) {
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
 
-      <HelpMapController markers={mappable} userLocation={userLocation} />
+      <HelpMapController markers={processedMarkers} userLocation={userLocation} />
 
       {userLocation && (
         <Marker position={[userLocation.lat, userLocation.lon]} icon={userLocationIcon}>
@@ -108,18 +134,25 @@ export default function HelpMap({ markers = [], userLocation = null }) {
         </Marker>
       )}
 
-      {mappable.map((m) => {
+      {processedMarkers.map((m) => {
         const style = CATEGORY_STYLE[m.category] || CATEGORY_STYLE.hospital;
         return (
           <Marker
             key={m.id}
-            position={[m.latitude, m.longitude]}
+            position={[m.displayLat, m.displayLon]}
             icon={createHelpIcon(style.color, style.label)}
           >
             <Popup className="safewalk-popup">
               <strong>{m.name}</strong>
               <p>{m.type}</p>
               {m.address && <p>{m.address}</p>}
+              {m.phone && (
+                <p>
+                  <a href={`tel:${m.phone}`} style={{ color: "#0d9488", textDecoration: "none" }}>
+                    📞 {m.phone}
+                  </a>
+                </p>
+              )}
               {m.distanceLabel && (
                 <p>
                   <Navigation size={11} style={{ verticalAlign: "middle" }} /> {m.distanceLabel} away

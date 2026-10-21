@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Compass,
@@ -11,6 +11,7 @@ import {
   Search,
   Navigation,
   Square,
+  History,
 } from "lucide-react";
 import { useAuth } from "../context/useAuth";
 import LocationSearch from "../components/LocationSearch";
@@ -22,6 +23,7 @@ import ErrorMessage from "../components/ErrorMessage";
 import { geocodeLocation, fetchRoute, chooseBestLocation } from "../services/routeService";
 import { ApiError } from "../services/api";
 import useLiveTrip from "../hooks/useLiveTrip";
+import tripService from "../services/tripService";
 
 function formatElapsedDuration(ms) {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -49,7 +51,7 @@ function tripStatusLabel(status) {
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const {
     isActive: isTripActive,
     status: tripStatus,
@@ -60,6 +62,60 @@ export default function DashboardPage() {
     startTrip,
     stopTrip,
   } = useLiveTrip();
+
+  const activeTripRef = useRef(null);
+
+  const handleStartTrip = async () => {
+    try {
+      if (isAuthenticated) {
+        const originLabel = startLabel || startQuery || "Starting Location";
+        const destinationLabel = destLabel || destQuery || "Destination";
+        const origin = startCoords ? { latitude: startCoords[0], longitude: startCoords[1] } : null;
+        const destination = destCoords ? { latitude: destCoords[0], longitude: destCoords[1] } : null;
+
+        const planned = await tripService.createTrip({
+          originLabel,
+          origin,
+          destinationLabel,
+          destination,
+        });
+
+        if (planned?.id) {
+          await tripService.startTrip(planned.id);
+          activeTripRef.current = planned.id;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not record trip to backend:", err?.message);
+    }
+    startTrip();
+  };
+
+  const handleStopTrip = async () => {
+    stopTrip();
+    if (activeTripRef.current) {
+      try {
+        await tripService.endTrip(activeTripRef.current);
+      } catch (err) {
+        console.warn("Could not mark trip completed in backend:", err?.message);
+      } finally {
+        activeTripRef.current = null;
+      }
+    }
+  };
+
+  // Sync latest coordinates with backend active trip while tracking
+  useEffect(() => {
+    if (activeTripRef.current && currentLocation) {
+      tripService
+        .updateTripLocation(activeTripRef.current, {
+          latitude: currentLocation.lat,
+          longitude: currentLocation.lon,
+          accuracy: currentLocation.accuracy,
+        })
+        .catch(() => {});
+    }
+  }, [currentLocation]);
 
   // Search input states
   const [startQuery, setStartQuery] = useState("");
@@ -203,6 +259,17 @@ export default function DashboardPage() {
           </div>
 
           <div className="quick-stats-row">
+            <Link to="/trips" className="stat-card">
+              <div className="stat-icon-wrapper teal">
+                <History size={20} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Trip History</span>
+                <strong className="stat-value">View Past Trips</strong>
+              </div>
+              <ArrowRight size={16} className="stat-arrow" />
+            </Link>
+
             <Link to="/emergency-contacts" className="stat-card">
               <div className="stat-icon-wrapper teal">
                 <PhoneCall size={20} />
@@ -276,12 +343,12 @@ export default function DashboardPage() {
 
               <div className="live-trip-actions">
                 {!isTripActive ? (
-                  <button type="button" className="btn-start-trip" onClick={startTrip}>
+                  <button type="button" className="btn-start-trip" onClick={handleStartTrip}>
                     <Navigation size={16} />
                     <span>Start Trip</span>
                   </button>
                 ) : (
-                  <button type="button" className="btn-stop-trip" onClick={stopTrip}>
+                  <button type="button" className="btn-stop-trip" onClick={handleStopTrip}>
                     <Square size={14} />
                     <span>Stop Trip</span>
                   </button>

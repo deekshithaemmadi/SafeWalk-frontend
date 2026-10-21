@@ -30,7 +30,7 @@ const initialContactState = {
 export default function EmergencyContactsPage() {
   const { user, updateUser } = useAuth();
 
-  // Local contacts state initialized from user or default safety contacts
+  // Local contacts state initialized from user's actual data
   const [contacts, setContacts] = useState(() => {
     if (user?.emergencyContacts && user.emergencyContacts.length > 0) {
       return user.emergencyContacts.map((c, i) => ({
@@ -40,6 +40,9 @@ export default function EmergencyContactsPage() {
         relation: c.relation,
       }));
     }
+    // Authenticated users with no contacts should see an empty list.
+    // Unauthenticated visitors get sample placeholders as a preview.
+    if (user) return [];
     return [
       { id: "1", name: "Primary Family Contact", phone: "9876543211", relation: "Mother" },
       { id: "2", name: "Trusted Friend", phone: "9876543212", relation: "Sister" },
